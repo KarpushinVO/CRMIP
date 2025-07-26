@@ -1,24 +1,25 @@
 import math
-from typing import Dict
-
 import scipy
 import datetime as dt
-
 import matplotlib.pyplot as plt
-from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
-
+import matplotlib as mpl
 from openpyxl import load_workbook
 from copy import deepcopy
 
+# Устанавливаем глобальный размер шрифта
+mpl.rcParams['font.size'] = 7  # Задаем размер шрифта 10
 
 # Внешняя функция:
 def differ(list1, list2):
+    """
+    :param list1: список с int либо float
+    :param list2: список с int либо float
+    :return: возвращает среднеквадратическую ошибку
+    """
     MSE = [(i + j) ** 2 for i, j in zip(list1, list2)]
     return sum(MSE) / len(MSE)
 
-
 class ProxyModel:
-
 
     def __init__(self, excel):
         self.sheet = excel.worksheets[0]  # Атрибут для книги эксель
@@ -110,9 +111,13 @@ class ProxyModel:
             self.f[j] = f_input[i]
 
         for well_i, tau_i, f_i in zip(prod_CRM_output, self.tau, self.f):
-            f_i_for_inj = f_i.split(' ') # Мне нужно на текущей итерации достать из ключа подстроку с указанием нагнетательной скважины!
+            f_i_for_inj = f_i.split(
+                ' ')  # Мне нужно на текущей итерации достать из ключа подстроку с указанием нагнетательной скважины!
             for i in range(1, len(self.time)):
-                prod_CRM_output[well_i].append(prod_CRM_output[well_i][i - 1] * math.exp(-(i - (i - 1)) / self.tau[tau_i]) + (1 - math.exp(-(i - (i - 1)) / self.tau[tau_i])) * self.f[f_i] * self.inj_wells_rates['INJ ' + f_i_for_inj[1]][i])
+                prod_CRM_output[well_i].append(
+                    prod_CRM_output[well_i][i - 1] * math.exp(-(i - (i - 1)) / self.tau[tau_i]) + (
+                                1 - math.exp(-(i - (i - 1)) / self.tau[tau_i])) * self.f[f_i] *
+                    self.inj_wells_rates['INJ ' + f_i_for_inj[1]][i])
 
         step = len(list(prod_CRM_output.values())) // self.prod_amount
         boundary2 = step
@@ -139,29 +144,53 @@ x0 = [647, 220, 850, 800, 122, 122, 122, 122, 0.1, 0.9, 0.5, 0.5]
 
 # Границы
 bounds_for_all = (
-(0, 200), (0, 200), (0, 200), (0, 200), (0, 200), (0, 100), (0, 100), (0, 100), (0.025, 1),
-(0.025, 1), (0.025, 1), (0.025, 1))
+    (0, 200), (0, 200), (0, 200), (0, 200), (0, 200), (0, 100), (0, 100), (0, 100), (0.025, 1),
+    (0.025, 1), (0.025, 1), (0.025, 1))
 
 cons = [{'type': 'eq', 'fun': lambda x: x[8] + x[9] - 1},
         {'type': 'eq', 'fun': lambda x: x[10] + x[11] - 1}]
 
 result = scipy.optimize.minimize(model1.crm_calculate, x0, method='SLSQP', constraints=cons, bounds=bounds_for_all)
 
-#print(result.x)
+# print(result.x)
 print(result.fun)
 
 new_params = result.x
 model1.crm_calculate(new_params)
 
-CRM_names = list(model1.sum_prod_CRM.keys())
-FACT_names = list(model1.prod_wells_rates.keys())
-#print(model1.sum_prod_CRM)
+CRM_names = list(model1.sum_prod_CRM.keys())  # Имена CRM скважин
+FACT_names = list(model1.prod_wells_rates.keys())  # Имена фактических скважин
+# print(model1.sum_prod_CRM)
 
+# Данные для графиков
 ydata1 = model1.sum_prod_CRM[CRM_names[0]]
 ydata2 = model1.prod_wells_rates[FACT_names[0]]
 
-# plot the data
+ydata3 = model1.sum_prod_CRM[CRM_names[1]]
+ydata4 = model1.prod_wells_rates[FACT_names[1]]
 
-plt.plot(model1.time, ydata1)
-plt.plot(model1.time, ydata2)
+# plot the data
+plt.figure(figsize=(10, 5))
+
+# Создаем фигуру и оси
+plt.subplot(1, 2, 1)
+plt.plot(model1.time, ydata1, label=CRM_names[0])
+plt.plot(model1.time, ydata2, label=f'{FACT_names[1]} Факт')
+plt.xticks(rotation=45)
+plt.title(f'Сравнение фактических и моделируемых дебитов скважины {FACT_names[0]}')
+plt.xlabel('Дата')
+plt.ylabel('Дебит Qж, м3/сут')
+plt.legend()
+
+plt.subplot(1, 2, 2)
+plt.plot(model1.time, ydata3, label=CRM_names[1])
+plt.plot(model1.time, ydata4, label=f'{FACT_names[1]} Факт')
+plt.xticks(rotation=45)
+plt.title(f'Сравнение фактических и моделируемых дебитов скважины {FACT_names[1]}')
+plt.xlabel('Дата')
+plt.ylabel('Дебит Qж, м3/сут')
+plt.legend()
+
+# Отображаем график
+plt.tight_layout()  # Улучшает отображение, если метки перекрываются
 plt.show()
