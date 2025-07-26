@@ -2,9 +2,10 @@ import math
 from typing import Dict
 
 import scipy
-import pandas as pd
 import datetime as dt
-import plotly.express as px
+
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 
 from openpyxl import load_workbook
 from copy import deepcopy
@@ -128,7 +129,7 @@ class ProxyModel:
         return sum(self.MSE.values())
 
 
-wb = load_workbook(r"technical_data4.xlsx")
+wb = load_workbook(r"C:\Users\Виктор\Desktop\CRMIP\input_data\technical_data2.xlsx")
 model1 = ProxyModel(wb)
 
 # print(model1.crm_calculate([350, 233, 900, 676, 1, 1, 1, 1, 0.25, 0.25, 0.25, 0.25]))
@@ -138,7 +139,7 @@ x0 = [647, 220, 850, 800, 122, 122, 122, 122, 0.1, 0.9, 0.5, 0.5]
 
 # Границы
 bounds_for_all = (
-(0, 2000), (0, 2000), (0, 2000), (0, 2000), (0, 2000), (0, 1000), (0, 1000), (0, 1000), (0.025, 1),
+(0, 200), (0, 200), (0, 200), (0, 200), (0, 200), (0, 100), (0, 100), (0, 100), (0.025, 1),
 (0.025, 1), (0.025, 1), (0.025, 1))
 
 cons = [{'type': 'eq', 'fun': lambda x: x[8] + x[9] - 1},
@@ -146,25 +147,21 @@ cons = [{'type': 'eq', 'fun': lambda x: x[8] + x[9] - 1},
 
 result = scipy.optimize.minimize(model1.crm_calculate, x0, method='SLSQP', constraints=cons, bounds=bounds_for_all)
 
-print(*model1.qliq0.keys())
 #print(result.x)
 print(result.fun)
 
 new_params = result.x
 model1.crm_calculate(new_params)
 
+CRM_names = list(model1.sum_prod_CRM.keys())
+FACT_names = list(model1.prod_wells_rates.keys())
+#print(model1.sum_prod_CRM)
 
+ydata1 = model1.sum_prod_CRM[CRM_names[0]]
+ydata2 = model1.prod_wells_rates[FACT_names[0]]
 
-df = pd.DataFrame
-data_list = [model1.prod_wells_rates, model1.sum_prod_CRM]
-df = pd.concat([pd.DataFrame(data) for data in data_list], axis=1)
-df['Time'] = model1.time
+# plot the data
 
-
-fig1 = px.line(df, x="Time", y="PROD PH12")
-fig1.add_scatter(x=df['Time'], y=df['PROD PH12 CRM'], mode='markers', name='Модель PH12')
-fig1.show()
-
-fig2 = px.line(df, x="Time", y="PROD PH11")
-fig2.add_scatter(x=df['Time'], y=df['PROD PH11 CRM'], mode='markers', name='Модель PH11')
-fig2.show()
+plt.plot(model1.time, ydata1)
+plt.plot(model1.time, ydata2)
+plt.show()
