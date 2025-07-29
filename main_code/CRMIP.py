@@ -116,9 +116,8 @@ class ProxyModel:
                 ' ')  # Мне нужно на текущей итерации достать из ключа подстроку с указанием нагнетательной скважины!
             for i in range(1, len(self.time)):
                 prod_CRM_output[well_i].append(
-                    prod_CRM_output[well_i][i - 1] * math.exp(-(i - (i - 1)) / self.tau[tau_i]) + (
-                                1 - math.exp(-(i - (i - 1)) / self.tau[tau_i])) * self.f[f_i] *
-                    self.inj_wells_rates['INJ ' + f_i_for_inj[1]][i])
+                    prod_CRM_output[well_i][i - 1] * math.exp(-(i - (i - 1)) / self.tau[tau_i]) +
+                    (1 - math.exp(-(i - (i - 1)) / self.tau[tau_i])) * self.f[f_i] * self.inj_wells_rates['INJ ' + f_i_for_inj[1]][i])
 
         step = len(list(prod_CRM_output.values())) // self.prod_amount
         boundary2 = step
@@ -139,17 +138,20 @@ wb = load_workbook(r"C:\Users\Виктор\Desktop\CRMIP\input_data\technical_da
 model1 = ProxyModel(wb)
 
 # print(model1.crm_calculate([350, 233, 900, 676, 1, 1, 1, 1, 0.25, 0.25, 0.25, 0.25]))
-
+print(model1.tau.keys())
 # Первое значение qliq, tau, f
-x0 = [647, 220, 850, 800, 122, 122, 122, 122, 0.1, 0.9, 0.5, 0.5]
+x0 = [267, 267, 588, 988,
+      25, 100, 14, 16,
+      0.18, 0.2, 0.4, 0.6]
 
 # Границы
 bounds_for_all = (
-    (0, 200), (0, 200), (0, 200), (0, 200), (0, 200), (0, 100), (0, 100), (0, 100), (0.025, 1),
-    (0.025, 1), (0.025, 1), (0.025, 1))
+    (0, 600), (0, 600), (0, 1600), (0, 1600),
+    (0, 150), (0, 150), (0, 50), (0, 50),
+    (0, 1), (0, 1), (0.1, 1), (0.1, 1))
 
-cons = [{'type': 'eq', 'fun': lambda x: x[8] + x[9] - 1},
-        {'type': 'eq', 'fun': lambda x: x[10] + x[11] - 1}]
+cons = [{'type': 'eq', 'fun': lambda x: x[8] + x[10] - 1},
+        {'type': 'eq', 'fun': lambda x: x[9] + x[11] - 1}]
 
 result = scipy.optimize.minimize(model1.crm_calculate, x0, method='SLSQP', constraints=cons, bounds=bounds_for_all)
 
@@ -171,12 +173,12 @@ ydata3 = model1.sum_prod_CRM[CRM_names[1]]
 ydata4 = model1.prod_wells_rates[FACT_names[1]]
 
 # plot the data
-plt.figure(figsize=(10, 5))
+fig = plt.figure(figsize=(10, 5))
 
 # Создаем фигуру и оси
 plt.subplot(1, 2, 1)
 plt.plot(model1.time, ydata1, label=CRM_names[0])
-plt.plot(model1.time, ydata2, label=f'{FACT_names[1]} Факт')
+plt.scatter(model1.time, ydata2, color='red', marker='x', label=f'{FACT_names[1]} Факт')
 plt.xticks(rotation=45)
 plt.title(f'Сравнение фактических и моделируемых дебитов скважины {FACT_names[0]}')
 plt.xlabel('Дата')
@@ -185,12 +187,14 @@ plt.legend()
 
 plt.subplot(1, 2, 2)
 plt.plot(model1.time, ydata3, label=CRM_names[1])
-plt.plot(model1.time, ydata4, label=f'{FACT_names[1]} Факт')
+plt.scatter(model1.time, ydata4, color='red', marker='x', label=f'{FACT_names[1]} Факт')
 plt.xticks(rotation=45)
 plt.title(f'Сравнение фактических и моделируемых дебитов скважины {FACT_names[1]}')
 plt.xlabel('Дата')
 plt.ylabel('Дебит Qж, м3/сут')
 plt.legend()
+
+fig.text(0.5, 0.01, (new_params, result.fun), ha='center', fontsize=7)
 
 # Отображаем график
 plt.tight_layout()  # Улучшает отображение, если метки перекрываются
