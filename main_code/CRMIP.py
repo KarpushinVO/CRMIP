@@ -12,11 +12,11 @@ mpl.rcParams['font.size'] = 7  # Задаем размер шрифта 10
 # Внешняя функция:
 def differ(list1, list2):
     """
-    :param list1: список с int либо float
-    :param list2: список с int либо float
+    :param list1: массив с int либо float
+    :param list2: массив с int либо float
     :return: возвращает среднеквадратическую ошибку
     """
-    MSE = [(i + j) ** 2 for i, j in zip(list1, list2)]
+    MSE = [(i - j) ** 2 for i, j in zip(list1, list2)]
     return sum(MSE) / len(MSE)
 
 
@@ -35,7 +35,7 @@ class ProxyModel:
         self.prod_CRM = {}  # Об
         self.MSE = {}
         self.sum_prod_CRM = {}  # Сумма всех CRM моделей (равна количеству добывающих скважин)
-        self.time = []  # Время, в целом оно не нужно - есть количество строк, то есть шагов "К"
+        self.time = []  # Время
 
         for i in range(2, self.sheet.max_row):
             self.time.append(self.sheet[i][0].value)
@@ -137,25 +137,23 @@ class ProxyModel:
 wb = load_workbook(r"C:\Users\Виктор\Desktop\CRMIP\input_data\technical_data2.xlsx")
 model1 = ProxyModel(wb)
 
-# print(model1.crm_calculate([350, 233, 900, 676, 1, 1, 1, 1, 0.25, 0.25, 0.25, 0.25]))
-print(model1.tau.keys())
-# Первое значение qliq, tau, f
+# Первое приближение qliq, tau, f
 x0 = [267, 267, 588, 988,
-      25, 100, 14, 16,
-      0.18, 0.2, 0.4, 0.6]
+      15, 280, 15, 17.5,
+      0.1, 0.6489, 0.899993, 0.351]
 
 # Границы
 bounds_for_all = (
-    (0, 600), (0, 600), (0, 1600), (0, 1600),
-    (0, 150), (0, 150), (0, 50), (0, 50),
-    (0, 1), (0, 1), (0.1, 1), (0.1, 1))
+    (0, 400), (0, 400), (0, 600), (0, 1000),
+    (0.01, 20), (0.01, 280), (0, 15), (0, 20),
+    (0.1, 0.8), (0.1, 0.9), (0.1, 0.9), (0.1, 0.7))
 
 cons = [{'type': 'eq', 'fun': lambda x: x[8] + x[10] - 1},
         {'type': 'eq', 'fun': lambda x: x[9] + x[11] - 1}]
 
 result = scipy.optimize.minimize(model1.crm_calculate, x0, method='SLSQP', constraints=cons, bounds=bounds_for_all)
 
-# print(result.x)
+print(result.x)
 print(result.fun)
 
 new_params = result.x
