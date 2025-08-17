@@ -23,22 +23,22 @@ def differ(list1, list2):
 class ProxyModel:
 
     def __init__(self, excel):
-        self.sheet = excel.worksheets[0]  # Атрибут для книги эксель
-        self.inj_amount = 0  # Количество нагнетательных скважин
-        self.prod_amount = 0  # Количество добывающих скважин
-        self.f = {}  # Коэффициент взаимовлияния
-        self.tau = {}  # Коэффициент временного лага
-        self.qliq0 = {}  # Начальные дебиты
-        self.inj_wells_rates = {}  # Словарь ключи имена скважин, значения данные по закачке # TODO: Можно оставить
-        # как локальную переменную в методе
-        self.prod_wells_rates = {}  # Данные по добыче # TODO: Можно оставить как локальную переменную в методе
-        self.prod_CRM = {}  # Об
+        self.sheet = excel.worksheets[0]    # Атрибут для книги эксель
+        self.inj_amount = 0                 # Количество нагнетательных скважин
+        self.prod_amount = 0                # Количество добывающих скважин
+        self.f = {}                         # Коэффициент взаимовлияния
+        self.tau = {}                       # Коэффициент временного лага
+        self.qliq0 = {}                     # Начальные дебиты
+        self.inj_wells_rates = {}           # Словарь ключи имена скважин, значения данные по закачке
+        self.prod_wells_rates = {}          # Данные по добыче
+        self.prod_CRM = {}
         self.MSE = {}
-        self.sum_prod_CRM = {}  # Сумма всех CRM моделей (равна количеству добывающих скважин)
-        self.time = []  # Время
+        self.sum_prod_CRM = {}              # Сумма всех CRM моделей (равна количеству добывающих скважин)
+        self.time = []                      # Время
 
         for i in range(2, self.sheet.max_row):
             self.time.append(self.sheet[i][0].value)
+
         for column in range(1, self.sheet.max_column):
             q_data = []  # временная переменная для добавления расходов доб/нагн скважин
             # Идем по листу и добавляем информацию в словари
@@ -53,6 +53,7 @@ class ProxyModel:
                     q_data.append(self.sheet[i][column].value)
                 self.prod_wells_rates.update({self.sheet[1][column].value: q_data})
                 self.MSE.update({'MSE ' + self.sheet[1][column].value: None})
+
         # Создаем словари с нужными параметрами и названиями CRM-скважин-моделей
         for i in self.prod_wells_rates:
             for j in self.inj_wells_rates:
@@ -60,8 +61,9 @@ class ProxyModel:
                 self.tau.update({'tau_' + str(i[5::]) + ' ' + str(j[4::]): None})
                 self.qliq0.update({'qliq0_' + str(i[5::]) + '&' + str(j[4::]): None})
                 self.prod_CRM.update({i[5::] + ' & ' + j[4::]: []})
+
         # Подготовка словаря для суммирования CRM моделей по одной скважине и
-        self.sum_prod_CRM = self.sum_prod_CRM.fromkeys(list(self.prod_wells_rates.keys()), [])
+        self.sum_prod_CRM = self.sum_prod_CRM.fromkeys(list(self.prod_wells_rates.keys()),[])
         self.sum_prod_CRM = {key + ' CRM': value for key, value in self.sum_prod_CRM.items()}
 
         # Приведение к формату времени
@@ -69,54 +71,44 @@ class ProxyModel:
 
     def make_initial_conditions(self):
         for i, j in zip(self.f, self.tau):  # Задаем начальные значения для f, tau
-            self.f[i] = round(1 / self.inj_amount, 2)
+            self.f[i] = round(1 / self.prod_amount, 2)
             self.tau[j] = 10
-        auto_ini_qliq0 = list(self.qliq0.keys())  # список ключей начальных дебитов
-        step = len(
-            auto_ini_qliq0) // self.prod_amount  # расчет шага количество начальных дебитов (модельных) / количество доб. скважи
-        q_0 = []  # Временная переменная, чтобы передать первые значения из дебитов скважин и распределить их потом
-        # по стартовым дебитам CRM скважин
+
+        q_0 = []  # Временная переменная
         for i in self.prod_wells_rates:
-            q_0.append(self.prod_wells_rates[i][0] // step)  # здесь начальный дебит добывающей скважины делится на
-            # количество CRM моделей приходящих на нее
-
-        boundary2 = step  # Чтобы перескакивать с одной группы CRM скважин на другую
-        boundary1 = 0  # Чтобы заполнять двойками, тройками
-
-        for i in range(0, len(q_0)):
-            for j in range(boundary1, boundary2):
-                auto_ini_qliq0[j] = q_0[i]
-            boundary2 += step
-            boundary1 += step
-        self.qliq0 = {i: j for i, j in zip(list(self.qliq0.keys()), auto_ini_qliq0)}
-        return auto_ini_qliq0
+            for j in range(self.inj_amount):
+                q_0.append(self.prod_wells_rates[i][0] // self.inj_amount)
+        self.qliq0 = {i: j for i, j in zip(list(self.qliq0.keys()), q_0)}
+        return q_0
 
     def crm_calculate(self,
-                      in_package):  # TODO: Нужно донастроить функциюю по аргументам, в циклах используются атрибуты класса, а нужно аргументы прим.: тау f
-        # Добавляем данные в списки словаря из списка q аргумента функции
+                      in_package):
+
         list_length = len(self.qliq0)  # временная переменная для создания списка параметров на вход
 
+        # Берем входные дебиты и заносим их в атрибут дебитов
         q_input = in_package[0:list_length]
-        self.qliq0 = self.qliq0.fromkeys(list(self.qliq0.keys()), in_package[0:list_length])
+        self.qliq0 = {i: j for i, j in zip(list(self.qliq0.keys()), in_package[0:list_length])}
+
         tau_input = in_package[list_length: list_length * 2]
         f_input = in_package[list_length * 2: list_length * 3]
+
         prod_CRM_output = deepcopy(self.prod_CRM)
 
-        for i, j in enumerate(prod_CRM_output):  # TODO: обернуть в функцию, чтобы было красиво
+        for i, j in enumerate(prod_CRM_output):  # TODO: обернуть в функцию
             prod_CRM_output[j].append(q_input[i])
 
         for i, j in enumerate(self.tau):
             # Значение по ключу j равно значению из тау инпут
             self.tau[j] = tau_input[i]
+
         for i, j in enumerate(self.f):
             self.f[j] = f_input[i]
 
         for well_i, tau_i, f_i in zip(prod_CRM_output, self.tau, self.f):
-            f_i_for_inj = f_i.split(
-                ' ')  # Мне нужно на текущей итерации достать из ключа подстроку с указанием нагнетательной скважины!
+            f_i_for_inj = f_i.split(' ')  # Очень важный момент в коде: на текущей итерации из ключа берется подстрока с указанием нагнетательной скважины.
             for i in range(1, len(self.time)):
-                prod_CRM_output[well_i].append(
-                    prod_CRM_output[well_i][i - 1] * math.exp(-(i - (i - 1)) / self.tau[tau_i]) +
+                prod_CRM_output[well_i].append(prod_CRM_output[well_i][i - 1] * math.exp(-(i - (i - 1)) / self.tau[tau_i]) +
                     (1 - math.exp(-(i - (i - 1)) / self.tau[tau_i])) * self.f[f_i] * self.inj_wells_rates['INJ ' + f_i_for_inj[1]][i])
 
         step = len(list(prod_CRM_output.values())) // self.prod_amount
@@ -137,6 +129,9 @@ class ProxyModel:
 wb = load_workbook(r"C:\Users\Виктор\Desktop\CRMIP\input_data\technical_data2.xlsx")
 model1 = ProxyModel(wb)
 
+model1.make_initial_conditions()
+print(model1.qliq0)
+
 # Первое приближение qliq, tau, f
 x0 = [267, 267, 588, 988,
       15, 280, 15, 17.5,
@@ -151,17 +146,14 @@ bounds_for_all = (
 cons = [{'type': 'eq', 'fun': lambda x: x[8] + x[10] - 1},
         {'type': 'eq', 'fun': lambda x: x[9] + x[11] - 1}]
 
-result = scipy.optimize.minimize(model1.crm_calculate, x0, method='SLSQP', constraints=cons, bounds=bounds_for_all)
 
-print(result.x)
-print(result.fun)
+result = scipy.optimize.minimize(model1.crm_calculate, x0, method='SLSQP', constraints=cons, bounds=bounds_for_all)
 
 new_params = result.x
 model1.crm_calculate(new_params)
 
 CRM_names = list(model1.sum_prod_CRM.keys())  # Имена CRM скважин
 FACT_names = list(model1.prod_wells_rates.keys())  # Имена фактических скважин
-# print(model1.sum_prod_CRM)
 
 # Данные для графиков
 ydata1 = model1.sum_prod_CRM[CRM_names[0]]
